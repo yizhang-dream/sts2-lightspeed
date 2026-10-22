@@ -1,0 +1,44 @@
+name: ci
+on: [push, pull_request]
+
+jobs:
+  build-test:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build --config Release --target run parity search map
+      - name: Determinism + bench smoke
+        run: bash tools/ci_gate.sh
+        shell: bash
+      - name: Parity corpus (65 positions, zero field diffs required)
+        run: bash tools/parity_batch.sh
+        shell: bash
+
+  python-bindings:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install pybind11
+      - name: Build module
+        run: |
+          cmake -B build -DSTS2_BUILD_PYTHON=ON -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release --target sts2
+      - name: Smoke run through the bindings
+        run: |
+          python - <<'PY'
+          import importlib.util, pathlib
+          so = next(pathlib.Path("build").rglob("sts2*.so"))
+          spec = importlib.util.spec_from_file_location("sts2", so)
+          sts2 = importlib.util.module_from_spec(spec); spec.loader.exec_module(sts2)
+          r = sts2.Run.start("960000")
+          assert r.summary()["hp"] == 80
+          print("bindings ok, floor", r.summary()["floor"])
+          PY
