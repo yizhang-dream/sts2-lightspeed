@@ -4,6 +4,7 @@
 //   run bench       <seedStart> <count> [sims]
 //   run determinism <seed> [sims]
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
